@@ -20,8 +20,8 @@ struct sigaction alarmAction;
 struct sigaction parentAlarmAction;
 int count = 0;
 
-void display (int);
-void fatal (char * str);
+inline void display (int);
+inline void fatal (char * str);
 
 void main ()
 {
@@ -56,21 +56,22 @@ void main ()
 						kill(child1id, SIGALRM);
 						kill(child2id, SIGALRM);
 					}
-					kill(child1id, SIGSTOP);
-					kill(child2id, SIGSTOP);
+					fflush(stdout);
+					kill(child1id, SIGINT);
+					kill(child2id, SIGINT);
 					break;
 			}
 			break;
 	}
 }
 
-void display (int sig)
+inline void display (int sig)
 {
 	printf("Count is %9d, my pid is %d\n", count, getpid());
 	count = 0;
 }
 
-void fatal (char * str)
+inline void fatal (char * str)
 {
 	perror(str);
 	exit(errno);
