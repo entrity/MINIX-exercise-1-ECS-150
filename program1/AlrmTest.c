@@ -16,8 +16,8 @@ output might look like:
 #include <stdio.h>
 
 pid_t child1id, child2id;
-struct sigaction alarmAction;
-struct sigaction parentAlarmAction;
+struct sigaction printAction;
+sigset_t block_mask;
 int count = 0;
 
 inline void display (int);
@@ -25,31 +25,32 @@ inline void fatal (char * str);
 
 void main ()
 {
-	int i;
-	parentAlarmAction.sa_handler = SIG_IGN;
-	alarmAction.sa_handler = display;
-	sigaction(SIGALRM, &alarmAction, NULL);
-	switch (fork()) {
+	int i; // counter for parent's for loop
+	// build sigaction for children
+	sigemptyset(&block_mask);
+	sigaddset(&block_mask, SIGINT);
+	printAction.sa_mask = block_mask;
+	printAction.sa_handler = display;
+	sigaction(SIGALRM, &printAction, NULL);
+	// fork
+	switch (child1id = fork()) {
 		case -1:
 			fatal("failed fork");
 			break;
 		case 0: // child 1
-			child1id = getpid();
 			while (1)
 				count ++;
 			break;
 		default: // parent
-			switch (fork()) {
+			switch (child2id = fork()) {
 				case -1:
 					fatal("failed fork");
 					break;
 				case 0: // child 2
-					child2id = getpid();
 					while (1)
 						count ++;
 					break;
 				default: // parent
-					sigaction(SIGALRM, &parentAlarmAction, NULL);
 					// iterate 5 times
 					for (i = 0; i < 5; i++) {
 						sleep(1);
@@ -67,7 +68,7 @@ void main ()
 
 inline void display (int sig)
 {
-	printf("Count is %9d, my pid is %d\n", count, getpid());
+	printf("Count is %10d, my pid is %d\n", count, getpid());
 	count = 0;
 }
 
