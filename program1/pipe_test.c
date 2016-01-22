@@ -60,7 +60,7 @@ inline void reverse (char buff[], int n);
 
 void interruptHandler(int n)
 {
-	wait();
+	while (wait() != -1) ;
 	printPid();
 	display("I am about to die", 17);
 	NEWLINE;
@@ -154,7 +154,7 @@ int main ()
 			display("I just received the string ", 27);
 			display(buffer1, nreadA);
 			NEWLINE;
-			// Signal death of children
+			// Signal death of all
 			kill(0, SIGINT);
 			break;
 	}
