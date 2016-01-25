@@ -22,11 +22,16 @@
 int n;
 pid_t topPid;
 pid_t * ptree;
-int leafct = 0; // keeps count of how many leaves exist currently
-int leafLimit; // how many leaves will exist for full tree
+int leafct, leafLimit;
+int x = 1; // process identifier
+struct sigaction interruptAction;
+struct sigaction stopAction;
+int child1, child2;
 
-void spawn ();
-void handleInterrupt (int cpid);
+void spawn2 ();
+int spawn (int);
+void handleInterrupt (int);
+void swansong (int);
 
 int main (int argc, char * argv[])
 {
@@ -36,49 +41,82 @@ int main (int argc, char * argv[])
 		printf("Usage %s <integer>\n\tYou supplied only %d args\n", argv[0], argc);
 		return E2BIG;
 	}
+	// Set signal handler
+	interruptAction.sa_handler = handleInterrupt;
+	sigaction(SIGINT, &interruptAction, NULL);
+	stopAction.sa_handler = swansong;
+	sigaction(SIGTERM, &stopAction, NULL);
 	// Get user input
 	sscanf(argv[1], "%d", &n);
-	leafLimit = pow(2, n);
+	leafLimit = pow(2, n - 1);
 	// Start tree of processes
-	if (--n > 0) {
-		spawn();
-		spawn();
-		pause();
-	}
+	spawn2();
 	// Success
 	return 0;
 }
 
-// Fork until a tree depth of n is reached (each process can only fork once)
-void spawn ()
+void outliveChild (int pid) {
+	int status;
+	do {
+		waitpid(pid, &status, 0);
+	} while (! WIFEXITED(status) );
+}
+
+void swansong (int sig)
 {
-	if (n > 0) { // this is a nonterminal node
-		switch (fork()) {
-			case -1: // error
-				exit(errno);
-				break;
-			case 0: // child
-				printf("spawend  %d %d\n", getpid(), n);
-				n--;
-				spawn();
-				spawn();
-				pause();
-				break;
-			default: // parent
-				break;
-		}
+	printf("swan %d %d\n", child1, child2);
+	if (child1)
+		kill(child1, SIGTERM);
+	if (child2)
+		kill(child2, SIGTERM);
+	printf("I am process %d; my process pid is %d\nMy parent's process pid is %d\n\n", x, getpid(), getppid());
+	if (n <= 0) // leaf
+		exit(0);
+}
+
+void spawn2 ()
+{
+	n--;
+	if (n > 0) {
+		child1 = spawn(x*2);
+		if (child1 <= 0) return;
+		child2 = spawn(x*2+1);
+		if (child2 <= 0) return;
+		outliveChild(child1);
+		outliveChild(child2);
 	} else {
-		printf("terminal %d %d\n", getpid(), n);
-		// this is a terminal node
-		kill(SIGINT, topPid);
+		child1 = child2 = 0;
+		kill(topPid, SIGINT);
+		pause();
+	}
+}
+
+// Fork until a tree depth of n is reached (each process can only fork once)
+int spawn (int id)
+{
+	int pid;
+	switch (pid = fork()) {
+		case -1: // error
+			perror("bad fork\n");
+			exit(errno);
+			break;
+		case 0: // child
+			x = id;
+			spawn2();
+			break;
+		default: // parent
+			return pid;
 	}
 }
 
 // Increment leaf count. Start output if leaf limit is reached.
-void handleInterrupt (int cpid)
+void handleInterrupt (int signum)
 {
-	if (++leafct == leafLimit)
-		printf("leafct %d\n", leafct		);
-	else
-		pause();
+	printf("\t\tkil; %d %d %d %d\n", x, signum, leafct, leafLimit);
+	if (getpid() == topPid) {
+		++leafct;
+		if (leafct == leafLimit) {
+			swansong(signum);
+		}
+	}
 }
