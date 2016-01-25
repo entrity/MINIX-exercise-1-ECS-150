@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <string.h>
 
 int depth = 0;
 int isDepthReached = 0;
@@ -15,14 +16,17 @@ struct node_t {
 	struct node_t * next;
 };
 struct node_t * queue;
+struct node_t * queueEnd;
 
 void enqueue (char * path) {
+	printf("ENQ... %s\n", path);
 	struct node_t * node = (struct node_t *) malloc(sizeof(struct node_t));
 	node->path = path;
-	if (queue)
-		queue->next = node;
+	if (queueEnd)
+		queueEnd->next = node;
 	else
 		queue = node;
+	queueEnd = node;
 }
 
 int isDir (char * path)
@@ -57,35 +61,44 @@ int main (int argc, char * argv[])
 		perror("path is not a directory");
 		exit(ENOENT);
 	}
-	enqueue(argv[1]);
+	fullpath = malloc(strlen(argv[1] + 1));
+	strcpy(fullpath, argv[1]);
+	enqueue(fullpath);
+
 	// loop
 	while (queue) {
-		printf("%s\n", queue->path);
+		printf("%s...\n", queue->path);
 		if (!(dp = opendir(queue->path))) {
-			perror("unable to open dir");
+			perror("unable to open dir at top of loop");
+			fprintf(stdout, "%s\n", queue->path);
 			exit(errno);
 		}
 		// iterate items in current directory
 		while(dip = readdir(dp)) {
+			if (0 == strcmp(".", dip->d_name) || 0 == strcmp("..", dip->d_name) )
+				continue;
 			// formulate fullpath of dirname and basename
-			if (fullpath)
-				free(fullpath);
+			fullpath = malloc(strlen(queue->path) + strlen(dip->d_name) + 2);
 			sprintf(fullpath, "%s/%s", queue->path, dip->d_name);
-			printf("%s\n", fullpath);
 			// if match, done
 			if (0 == strcmp(dip->d_name, argv[2])) {
-				printf("\t...Match found!!!");
+				printf("\t...Match found!!!\n");
+				printf("\t%s\n", fullpath);
 				exit(0);
 			}
 			// if no match but isdir, enqueue
-			else if (access(fullpath, F_OK) && isDir(fullpath))
+			if (0 == access(fullpath, F_OK) && isDir(fullpath))
 				enqueue(fullpath);
+			else
+				printf("%s\n", fullpath);
 		}
-		// close directory pointer
+		printf("%s\n", "end of iter");
+		// cleanup; advance queue
 		closedir(dp);
-		// advance queue
+		struct node_t * prev = queue;
+		free(queue->path);
 		queue = queue->next;
-		free(queue);
+		free(prev);
 	}
 	return 0;
 }
