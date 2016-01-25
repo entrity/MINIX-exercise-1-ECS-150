@@ -19,9 +19,9 @@ struct node_t * queue;
 struct node_t * queueEnd;
 
 void enqueue (char * path) {
-	printf("ENQ... %s\n", path);
 	struct node_t * node = (struct node_t *) malloc(sizeof(struct node_t));
 	node->path = path;
+	node->next = NULL;
 	if (queueEnd)
 		queueEnd->next = node;
 	else
@@ -67,7 +67,7 @@ int main (int argc, char * argv[])
 
 	// loop
 	while (queue) {
-		printf("%s...\n", queue->path);
+		printf("%s\n", queue->path);
 		if (!(dp = opendir(queue->path))) {
 			perror("unable to open dir at top of loop");
 			fprintf(stdout, "%s\n", queue->path);
@@ -92,13 +92,12 @@ int main (int argc, char * argv[])
 			else
 				printf("%s\n", fullpath);
 		}
-		printf("%s\n", "end of iter");
 		// cleanup; advance queue
 		closedir(dp);
 		struct node_t * prev = queue;
-		free(queue->path);
 		queue = queue->next;
-		free(prev);
+		if (prev)
+			free(prev);
 	}
 	return 0;
 }
