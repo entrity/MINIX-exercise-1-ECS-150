@@ -45,7 +45,7 @@ int main (int argc, char * argv[])
 	char * fullpath = NULL;
 	// check format or params
 	if (argc < 3) {
-		printf("Usage %s <dirpath> <filename>", argv[0]);
+		fprintf(stderr, "Usage %s <dirpath> <filename>\n", argv[0]);
 		exit(E2BIG);
 	}
 	// check existence of path
@@ -61,16 +61,19 @@ int main (int argc, char * argv[])
 		perror("path is not a directory");
 		exit(ENOENT);
 	}
+
 	fullpath = malloc(strlen(argv[1] + 1));
 	strcpy(fullpath, argv[1]);
+	if (fullpath[strlen(fullpath)-1] == '/')
+		fullpath[strlen(fullpath)-1] = '\0';
 	enqueue(fullpath);
+	printf("%s\n", queue->path);
 
 	// loop
 	while (queue) {
-		printf("%s\n", queue->path);
 		if (!(dp = opendir(queue->path))) {
 			perror("unable to open dir at top of loop");
-			fprintf(stdout, "%s\n", queue->path);
+			fprintf(stderr, "%s\n", queue->path);
 			exit(errno);
 		}
 		// iterate items in current directory
@@ -86,11 +89,10 @@ int main (int argc, char * argv[])
 				printf("\t%s\n", fullpath);
 				exit(0);
 			}
+			printf("%s\n", fullpath);
 			// if no match but isdir, enqueue
 			if (0 == access(fullpath, F_OK) && isDir(fullpath))
 				enqueue(fullpath);
-			else
-				printf("%s\n", fullpath);
 		}
 		// cleanup; advance queue
 		closedir(dp);
