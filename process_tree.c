@@ -64,12 +64,11 @@ void outliveChild (int pid) {
 
 void swansong (int sig)
 {
-	printf("swan %d %d\n", child1, child2);
+	printf("I am process %d; my process pid is %d\nMy parent's process pid is %d\n\n", x, getpid(), getppid());
 	if (child1)
 		kill(child1, SIGTERM);
 	if (child2)
 		kill(child2, SIGTERM);
-	printf("I am process %d; my process pid is %d\nMy parent's process pid is %d\n\n", x, getpid(), getppid());
 	if (n <= 0) // leaf
 		exit(0);
 }
@@ -112,7 +111,7 @@ int spawn (int id)
 // Increment leaf count. Start output if leaf limit is reached.
 void handleInterrupt (int signum)
 {
-	printf("\t\tkil; %d %d %d %d\n", x, signum, leafct, leafLimit);
+	// printf("\t\tkil; %d %d %d %d\n", x, signum, leafct, leafLimit);
 	if (getpid() == topPid) {
 		++leafct;
 		if (leafct == leafLimit) {
