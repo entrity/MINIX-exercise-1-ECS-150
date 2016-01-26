@@ -1,5 +1,28 @@
 #include "smallsh.h" /* include file for example */
 #include <stdlib.h>
+#include <signal.h>
+#include <setjmp.h>
+
+pid_t fgPid;
+struct sigaction myAction;
+int ignoreEOT = 0;
+sigjmp_buf env;
+
+
+void myHandler (int sig)
+{
+  int status;
+  char buff[2];
+  printf("pid %d\n", getpid());
+  ignoreEOT = 1;
+  fflush(stdout);
+  if (fgPid) {
+      kill(SIGKILL, fgPid);
+      waitpid(fgPid, &status, 0);
+  }
+  else
+    printf(" Interrupt detected, but there is no foreground process to terminate.\n");
+}
 
 /* program buffers and work pointers */
 static char inpbuf[MAXBUF], tokbuf[2*MAXBUF], *ptr = inpbuf, *tok = tokbuf;
@@ -16,8 +39,13 @@ char *p;
   printf("%s ", p);
 
   for(count = 0;;){
-    if((c = getchar()) == EOF)
-      return(EOF);
+    if((c = getchar()) == EOF) {
+      if (ignoreEOT) {
+        ignoreEOT = 0;
+        c = '\n';
+      } else
+        return(EOF);
+    }
 
     if(count < MAXBUF)
       inpbuf[count++] = c;
@@ -55,7 +83,6 @@ char **outptr;
   int type;
 
   *outptr = tok;
-
   /* strip white space */
   for(;*ptr == ' ' || *ptr == '\t'; ptr++)
     ;
@@ -92,6 +119,8 @@ int where;
   }
 
   if(pid == 0){
+    if (where == BACKGROUND)
+      setsid();
     execvp(*cline, cline);
     perror(*cline);
     exit(127);
@@ -104,9 +133,11 @@ int where;
     return(0);
   }
 
+  fgPid = pid;
   /* wait until process pid exits */
   while( (ret=wait(&exitstat)) != pid && ret != -1)
     ;
+  fgPid = 0;
 
   return(ret == -1 ? -1 : exitstat);
 }
@@ -149,7 +180,9 @@ char *prompt = "Command>"; /* prompt */
 
 main()
 {
+  myAction.sa_handler = myHandler;
+  sigaction(SIGINT, &myAction, NULL);
+  sigaction(SIGQUIT, &myAction, NULL);
   while(userin(prompt) != EOF)
-    procline();
+      procline();
 }
-
