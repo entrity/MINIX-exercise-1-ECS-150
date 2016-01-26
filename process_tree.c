@@ -11,7 +11,9 @@
 
 */
 
+#include <unistd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <stdio.h>
 #include <math.h>
@@ -19,19 +21,89 @@
 #include <string.h>
 #include <errno.h>
 
-int n;
-pid_t topPid;
-pid_t * ptree;
-int leafct, leafLimit;
-int x = 1; // process identifier
-struct sigaction interruptAction;
-struct sigaction stopAction;
-int child1, child2;
+#define LEFT 0
+#define RIGHT 1
 
-void spawn2 ();
-int spawn (int);
+int n;
+int waitStatus;
+pid_t topPid;
+int x = 1; // process identifier
+struct sigaction act;
+int child1, child2;
+int isWaitingLeft, isWaitingRight;
+
+int spawnOne (int, int);
 void handleInterrupt (int);
-void swansong (int);
+void swansong ();
+
+void handleInterrupt (int sig)
+{
+	switch (sig) {
+		case SIGUSR1:
+			isWaitingRight = 0;
+			break;
+		case SIGUSR2:
+			isWaitingLeft = 0;
+			break;
+		default:
+			swansong();
+			break;
+	}
+}
+
+void swansong ()
+{
+	printf("I am process %d; my process pid is %d\nMy parent's process pid is %d\n\n", x, getpid(), getppid());
+	if (child1) {
+		kill(child1, SIGALRM);
+		waitpid(child1, &waitStatus, 0);
+	}
+	if (child2) {
+		kill(child2, SIGALRM);
+		waitpid(child2, &waitStatus, 0);
+	}
+}
+
+int runProc (int isRight) {
+	if (--n > 0) { // non-leaf node
+		// printf("spawn %d\n", x);
+		isWaitingLeft = 1;
+		isWaitingRight = 1;
+		if ((child1 = spawnOne(2*x, LEFT)) == -1)
+			exit(errno);
+		if ((child2 = spawnOne(2*x+1, RIGHT)) == -1)
+			exit(errno);
+		while (isWaitingLeft || isWaitingRight)
+			pause();
+		swansong();
+	} else if (x == 1) {
+		swansong();
+	} else { // leaf node
+		isWaitingLeft = 0;
+		isWaitingRight = 0;
+		child1 = child2 = 0;
+		// printf("leaf node %d\n", x);
+		kill( getppid(), isRight ? SIGUSR1 : SIGUSR2 );
+		pause();
+	}
+}
+
+int spawnOne (int newX, int isRight )
+{
+	int pid;
+	switch (pid = fork()) {
+		case -1: // error
+			perror("bad fork\n");
+			exit(errno);
+			break;
+		case 0: // child
+			x = newX;
+			runProc(isRight);
+			break;
+		default: // parent
+			return pid;
+	}
+}
 
 int main (int argc, char * argv[])
 {
@@ -42,80 +114,15 @@ int main (int argc, char * argv[])
 		return E2BIG;
 	}
 	// Set signal handler
-	interruptAction.sa_handler = handleInterrupt;
-	sigaction(SIGINT, &interruptAction, NULL);
-	stopAction.sa_handler = swansong;
-	sigaction(SIGTERM, &stopAction, NULL);
+	sigfillset(&act.sa_mask);
+	act.sa_handler = handleInterrupt;
+	sigaction(SIGUSR1, &act, NULL);
+	sigaction(SIGUSR2, &act, NULL);
+	sigaction(SIGALRM, &act, NULL);
 	// Get user input
 	sscanf(argv[1], "%d", &n);
-	leafLimit = pow(2, n - 1);
 	// Start tree of processes
-	spawn2();
+	runProc(0);
 	// Success
 	return 0;
-}
-
-void outliveChild (int pid) {
-	int status;
-	do {
-		waitpid(pid, &status, 0);
-	} while (! WIFEXITED(status) );
-}
-
-void swansong (int sig)
-{
-	printf("I am process %d; my process pid is %d\nMy parent's process pid is %d\n\n", x, getpid(), getppid());
-	if (child1)
-		kill(child1, SIGTERM);
-	if (child2)
-		kill(child2, SIGTERM);
-	if (n <= 0) // leaf
-		exit(0);
-}
-
-void spawn2 ()
-{
-	n--;
-	if (n > 0) {
-		child1 = spawn(x*2);
-		if (child1 <= 0) return;
-		child2 = spawn(x*2+1);
-		if (child2 <= 0) return;
-		outliveChild(child1);
-		outliveChild(child2);
-	} else {
-		child1 = child2 = 0;
-		kill(topPid, SIGINT);
-		pause();
-	}
-}
-
-// Fork until a tree depth of n is reached (each process can only fork once)
-int spawn (int id)
-{
-	int pid;
-	switch (pid = fork()) {
-		case -1: // error
-			perror("bad fork\n");
-			exit(errno);
-			break;
-		case 0: // child
-			x = id;
-			spawn2();
-			break;
-		default: // parent
-			return pid;
-	}
-}
-
-// Increment leaf count. Start output if leaf limit is reached.
-void handleInterrupt (int signum)
-{
-	// printf("\t\tkil; %d %d %d %d\n", x, signum, leafct, leafLimit);
-	if (getpid() == topPid) {
-		++leafct;
-		if (leafct == leafLimit) {
-			swansong(signum);
-		}
-	}
 }
