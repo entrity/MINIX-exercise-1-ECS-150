@@ -12,16 +12,14 @@ sigjmp_buf env;
 void myHandler (int sig)
 {
   int status;
-  char buff[2];
-  printf("pid %d\n", getpid());
-  ignoreEOT = 1;
-  fflush(stdout);
   if (fgPid) {
       kill(SIGKILL, fgPid);
       waitpid(fgPid, &status, 0);
   }
-  else
+  else {
+    ignoreEOT = 1;
     printf(" Interrupt detected, but there is no foreground process to terminate.\n");
+  }
 }
 
 /* program buffers and work pointers */
