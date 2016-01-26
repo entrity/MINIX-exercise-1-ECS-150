@@ -16,23 +16,22 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <stdio.h>
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
-#define LEFT 0
-#define RIGHT 1
+#define SIGLEFT SIGUSR2
+#define SIGRIGHT SIGUSR1
 
 int n;
 int waitStatus;
 pid_t topPid;
-int x = 1; // process identifier
+int x = 1; // process identifier; flipped to zero when it's okay to die
 struct sigaction act;
 int child1, child2;
 int isWaitingLeft, isWaitingRight;
 
-int spawnOne (int, int);
+int spawnOne (int);
 void handleInterrupt (int);
 void swansong ();
 
@@ -47,8 +46,14 @@ void handleInterrupt (int sig)
 			break;
 		default:
 			swansong();
-			break;
+			return;
 	}
+	if ((isWaitingLeft|isWaitingRight) == 0)
+		if (x == 1)
+			swansong();
+		else
+			kill(getppid(), (x % 2) ? SIGRIGHT : SIGLEFT);
+
 }
 
 void swansong ()
@@ -62,33 +67,31 @@ void swansong ()
 		kill(child2, SIGALRM);
 		waitpid(child2, &waitStatus, 0);
 	}
+	exit(0);
 }
 
-int runProc (int isRight) {
+int runProc () {
 	if (--n > 0) { // non-leaf node
-		// printf("spawn %d\n", x);
 		isWaitingLeft = 1;
 		isWaitingRight = 1;
-		if ((child1 = spawnOne(2*x, LEFT)) == -1)
+		if ((child1 = spawnOne(2*x)) == -1)
 			exit(errno);
-		if ((child2 = spawnOne(2*x+1, RIGHT)) == -1)
+		if ((child2 = spawnOne(2*x+1)) == -1)
 			exit(errno);
-		while (isWaitingLeft || isWaitingRight)
+		while (x)
 			pause();
-		swansong();
-	} else if (x == 1) {
+	} else if (x == 1) { // in case command line argument is 1 or less
 		swansong();
 	} else { // leaf node
 		isWaitingLeft = 0;
 		isWaitingRight = 0;
 		child1 = child2 = 0;
-		// printf("leaf node %d\n", x);
-		kill( getppid(), isRight ? SIGUSR1 : SIGUSR2 );
+		kill( getppid(), (x % 2) ? SIGRIGHT : SIGLEFT );
 		pause();
 	}
 }
 
-int spawnOne (int newX, int isRight )
+int spawnOne (int newX )
 {
 	int pid;
 	switch (pid = fork()) {
@@ -98,7 +101,7 @@ int spawnOne (int newX, int isRight )
 			break;
 		case 0: // child
 			x = newX;
-			runProc(isRight);
+			runProc();
 			break;
 		default: // parent
 			return pid;
