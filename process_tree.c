@@ -76,7 +76,7 @@ int runProc () {
 		isWaitingRight = 1;
 		if ((child1 = spawnOne(2*x)) == -1)
 			exit(errno);
-		if ((child2 = spawnOne(2*x+1)) == -1)
+		if (child1 && (child2 = spawnOne(2*x+1)) == -1)
 			exit(errno);
 		while (x)
 			pause();
@@ -104,8 +104,9 @@ int spawnOne (int newX )
 			runProc();
 			break;
 		default: // parent
-			return pid;
+			break;
 	}
+	return pid;
 }
 
 int main (int argc, char * argv[])
