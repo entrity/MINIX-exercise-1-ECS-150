@@ -74,9 +74,9 @@ int main ()
 	pid_t pid;
 	int nreadA, nreadB, nreadC;
 
-	// config for SIGINT
+	// config for SIGUSR1
 	interruptAction.sa_handler = interruptHandler;
-	sigaction(SIGINT, &interruptAction, NULL);
+	sigaction(SIGUSR1, &interruptAction, NULL);
 
 	if ((pipe(pfdsA)) == -1)
 		fatal("Unable to create pipe A", PIPE_MAKE_ERR);
@@ -101,7 +101,7 @@ int main ()
 					break;
 				case 0: // child : p3
 					p = '3';
-					sigaction(SIGINT, &interruptAction, NULL);
+					sigaction(SIGUSR1, &interruptAction, NULL);
 					close(pfdsB[1]); // close write end of pipe B
 					if ((nreadC = read(pfdsB[0], buffer3, BUFF_SIZE)) == -1) // read from pipe, blocking until parent supplies data
 						fatal("Unable to read pipe", READ_PIPE_ERR);
@@ -155,7 +155,7 @@ int main ()
 			display(buffer1, nreadA);
 			NEWLINE;
 			// Signal death of all
-			kill(0, SIGINT);
+			kill(0, SIGUSR1);
 			break;
 	}
 
