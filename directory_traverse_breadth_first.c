@@ -10,6 +10,7 @@
 
 int depth = 0;
 int isDepthReached = 0;
+int matchesN = 0;
 struct stat status;
 struct node_t {
 	char * path;
@@ -17,16 +18,32 @@ struct node_t {
 };
 struct node_t * queue;
 struct node_t * queueEnd;
+struct node_t * matches;
+struct node_t * matchesEnd;
 
-void enqueue (char * path) {
+void append (char * path, struct node_t ** start_p, struct node_t ** end_p)
+{
 	struct node_t * node = (struct node_t *) malloc(sizeof(struct node_t));
-	node->path = path;
+	// make a new copy of the path so that the original can be freed. why? b/c this eliminates the need to record whether 0, 1, or 2 different node_t instances have a pointer to the string
+	node->path = malloc(strlen(path)+1);
+	strcpy(node->path, path);
 	node->next = NULL;
-	if (queueEnd)
-		queueEnd->next = node;
+	if (*end_p)
+		(*end_p)->next = node;
 	else
-		queue = node;
-	queueEnd = node;
+		*start_p = node;
+	*end_p = node;
+}
+
+void enqueue (char * path)
+{
+	append(path, &queue, &queueEnd);
+}
+
+void addMatch (char * path)
+{
+	append(path, &matches, &matchesEnd);
+	matchesN++;
 }
 
 int isDir (char * path)
@@ -83,23 +100,37 @@ int main (int argc, char * argv[])
 			// formulate fullpath of dirname and basename
 			fullpath = malloc(strlen(queue->path) + strlen(dip->d_name) + 2);
 			sprintf(fullpath, "%s/%s", queue->path, dip->d_name);
-			// if match, done
-			if (0 == strcmp(dip->d_name, argv[2])) {
-				printf("\t...Match found!!!\n");
-				printf("\t%s\n", fullpath);
-				exit(0);
-			}
 			printf("%s\n", fullpath);
+			// if match, save match
+			if (0 == strcmp(dip->d_name, argv[2]))
+				addMatch(fullpath);
 			// if no match but isdir, enqueue
 			if (0 == access(fullpath, F_OK) && isDir(fullpath))
 				enqueue(fullpath);
+			// cleanup
+			free(fullpath);
 		}
 		// cleanup; advance queue
 		closedir(dp);
 		struct node_t * prev = queue;
 		queue = queue->next;
-		if (prev)
+		if (prev) {
+			free(prev->path);
 			free(prev);
+		}
 	}
+
+	// output results
+	printf(" == %d matches found ==\n", matchesN);
+	while (matches) {
+		printf("%s\n", matches->path);
+		struct node_t * prev = matches;
+		matches = matches->next;
+		if (prev) {
+			free(prev->path);
+			free(prev);
+		}
+	}
+
 	return 0;
 }
