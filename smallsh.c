@@ -5,21 +5,33 @@
 
 pid_t fgPid;
 struct sigaction myAction;
-int ignoreEOT = 0;
 sigjmp_buf env;
+char *prompt = "Command>"; /* prompt */
 
 
 void myHandler (int sig)
 {
   int status;
+  int c;
   if (fgPid) {
-      kill(SIGKILL, fgPid);
-      waitpid(fgPid, &status, 0);
+      kill(fgPid, SIGSTOP);
+      printf(" Interrupt detected. Do you wish to terminate the forgeground process %d?\n[Y/n] ", fgPid);
+      fflush(stdout);
+      read(0, &c, 1);
+      if (c == 'n' || c == 'N') {
+        printf("Resuming proces %d...\n", fgPid);
+        kill(fgPid, SIGCONT);
+      }
+      else {
+        printf("Killing process %d...\n", fgPid);
+        kill(fgPid, SIGINT);
+      }
   }
   else {
-    ignoreEOT = 1;
-    printf(" Interrupt detected, but there is no foreground process to terminate.\n");
+    printf(" Interrupt detected, but there is no foreground process to terminate.\n%s ", prompt);
+    fflush(stdout);
   }
+  fflush(stdin);
 }
 
 /* program buffers and work pointers */
@@ -35,15 +47,9 @@ char *p;
 
   /* display prompt */
   printf("%s ", p);
-
   for(count = 0;;){
-    if((c = getchar()) == EOF) {
-      if (ignoreEOT) {
-        ignoreEOT = 0;
-        c = '\n';
-      } else
+    if((c = getchar()) == EOF)
         return(EOF);
-    }
 
     if(count < MAXBUF)
       inpbuf[count++] = c;
@@ -117,8 +123,7 @@ int where;
   }
 
   if(pid == 0){
-    if (where == BACKGROUND)
-      setsid();
+    setsid();
     execvp(*cline, cline);
     perror(*cline);
     exit(127);
@@ -133,7 +138,7 @@ int where;
 
   fgPid = pid;
   /* wait until process pid exits */
-  while( (ret=wait(&exitstat)) != pid && ret != -1)
+  while( waitpid(pid, &exitstat, WUNTRACED) != -1 && !WIFSTOPPED(exitstat) )
     ;
   fgPid = 0;
 
@@ -174,11 +179,10 @@ procline() /* process input line */
   }
 }
 
-char *prompt = "Command>"; /* prompt */
-
 main()
 {
   myAction.sa_handler = myHandler;
+  myAction.sa_flags = SA_RESTART; // so that getchar in userin restarts after signal handler completes
   sigaction(SIGINT, &myAction, NULL);
   sigaction(SIGQUIT, &myAction, NULL);
   while(userin(prompt) != EOF)
